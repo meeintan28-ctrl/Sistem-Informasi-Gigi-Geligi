@@ -1,0 +1,153 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny Everything
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- REUSABLE HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasRole(role) {
+      return isVerified() && getUserData().role == role;
+    }
+
+    function hasAnyRole(roles) {
+      return isVerified() && getUserData().role in roles;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- USERS COLLECTION ---
+    match /users/{userId} {
+      allow get: if isVerified() && (request.auth.uid == userId || hasRole('admin')) && isValidId(userId);
+      allow list: if hasRole('admin');
+      
+      function isValidUser(data) {
+        return data.keys().hasAll(['uid', 'email', 'role', 'displayName']) &&
+               data.uid == userId &&
+               data.uid == request.auth.uid &&
+               data.role in ['admin', 'dokter', 'terapis', 'staff'] &&
+               data.email is string && data.email.size() <= 200 &&
+               data.displayName is string && data.displayName.size() <= 100;
+      }
+
+      // Self-registration for new specialists, default role is 'terapis'
+      allow create: if isSignedIn() && isValidUser(incoming()) && 
+                    incoming().role == 'terapis' && 
+                    incoming().createdAt == request.time;
+      
+      allow update: if isVerified() && isValidId(userId) && (
+        // Self-update display name
+        (request.auth.uid == userId && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt']) && incoming().updatedAt == request.time) ||
+        // Admin update roles
+        (hasRole('admin') && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'updatedAt']) && incoming().updatedAt == request.time)
+      );
+    }
+
+    // --- PATIENTS COLLECTION ---
+    match /patients/{patientId} {
+      allow get: if isVerified() && isValidId(patientId);
+      // List enforced: Only see patients you created or if you are admin/dokter
+      allow list: if isVerified() && (resource.data.createdBy == request.auth.uid || hasAnyRole(['admin', 'dokter']));
+
+      function isValidPatient(data) {
+        return data.keys().hasAll(['name', 'nik', 'rm', 'gender', 'createdBy', 'createdAt']) &&
+               data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+               data.nik is string && data.nik.size() == 16 &&
+               data.rm is string && data.rm.size() <= 50 &&
+               data.gender in ['L', 'P'] &&
+               data.createdBy == request.auth.uid &&
+               data.createdAt == request.time &&
+               (!('incomeRange' in data) || data.incomeRange is string) &&
+               (!('hobbies' in data) || data.hobbies is string);
+      }
+
+      allow create: if isVerified() && isValidId(patientId) && isValidPatient(incoming()) && hasAnyRole(['admin', 'dokter', 'terapis', 'staff']);
+      
+      allow update: if isVerified() && isValidId(patientId) && (
+        (existing().createdBy == request.auth.uid || hasAnyRole(['admin', 'dokter'])) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'address', 'phone', 'incomeRange', 'hobbies', 'lastVisit', 'updatedAt']) &&
+        incoming().updatedAt == request.time &&
+        incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 100
+      );
+    }
+
+    // --- MEDICAL RECORDS COLLECTION ---
+    match /records/{recordId} {
+      allow get: if isVerified() && isValidId(recordId);
+      // Only operators can list their own records, or admin/dokter for audit
+      allow list: if isVerified() && (resource.data.operatorId == request.auth.uid || hasAnyRole(['admin', 'dokter']));
+
+      function isValidRecord(data) {
+         return data.keys().hasAll(['patientId', 'operatorId', 'date', 'status', 'createdAt']) &&
+                isValidId(data.patientId) &&
+                data.operatorId == request.auth.uid &&
+                data.status in ['draft', 'final'] &&
+                data.createdAt == request.time &&
+                exists(/databases/$(database)/documents/patients/$(data.patientId));
+      }
+
+      allow create: if isVerified() && isValidId(recordId) && isValidRecord(incoming()) && hasAnyRole(['admin', 'dokter', 'terapis']);
+      
+      allow update: if isVerified() && isValidId(recordId) && (
+        // Only operator can update if it's still a draft
+        existing().status == 'draft' &&
+        existing().operatorId == request.auth.uid &&
+        incoming().operatorId == existing().operatorId &&
+        incoming().patientId == existing().patientId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'date', 'vitalSigns', 'healthHistory', 'dentalHistory', 'clinicalExam', 
+          'odontogram', 'diagnosis', 'signatures', 'status', 'updatedAt'
+        ]) &&
+        incoming().updatedAt == request.time &&
+        (incoming().status == 'final' || incoming().status == 'draft')
+      );
+      
+      allow delete: if hasRole('admin') && isValidId(recordId);
+    }
+
+    // --- APPOINTMENTS COLLECTION ---
+    match /appointments/{appointmentId} {
+      allow get: if isVerified() && isValidId(appointmentId);
+      allow list: if isVerified();
+
+      function isValidAppointment(data) {
+        return data.keys().hasAll(['patientId', 'date', 'time', 'status', 'createdAt']) &&
+               isValidId(data.patientId) &&
+               data.status in ['scheduled', 'completed', 'cancelled'] &&
+               data.createdAt == request.time;
+      }
+
+      allow create: if isVerified() && isValidId(appointmentId) && isValidAppointment(incoming()) && hasAnyRole(['admin', 'staff', 'terapis']);
+      allow update: if isVerified() && isValidId(appointmentId) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'time', 'date', 'updatedAt']) &&
+        incoming().updatedAt == request.time &&
+        hasAnyRole(['admin', 'staff', 'terapis'])
+      );
+    }
+  }
+}

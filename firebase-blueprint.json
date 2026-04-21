@@ -1,0 +1,112 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information and role based access.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "dokter", "terapis", "staff"] },
+        "emailVerified": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Patient": {
+      "title": "Patient Demographics",
+      "description": "Detailed patient identity and contact information.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "nik": { "type": "string" },
+        "rm": { "type": "string" },
+        "birthDate": { "type": "string", "format": "date" },
+        "gender": { "type": "string", "enum": ["L", "P"] },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "incomeRange": { "type": "string" },
+        "hobbies": { "type": "string" },
+        "lastVisit": { "type": "string", "format": "date" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["name", "nik", "rm", "gender"]
+    },
+    "MedicalRecord": {
+      "title": "Dental Hygiene Medical Record",
+      "description": "The core dental hygiene asuhan record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "operatorId": { "type": "string" },
+        "operatorName": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "vitalSigns": { "type": "object" },
+        "healthHistory": { "type": "object" },
+        "dentalHistory": { "type": "object" },
+        "clinicalExam": { "type": "object" },
+        "odontogram": { "type": "object" },
+        "diagnosis": {
+          "type": "object",
+          "properties": {
+            "needs": { "type": "object" },
+            "goals": { "type": "string" },
+            "interventions": { "type": "array", "items": { "type": "string" } },
+            "aiInterventionSuggestions": { "type": "string" },
+            "evaluation": { "type": "string" }
+          }
+        },
+        "signatures": {
+          "type": "object",
+          "properties": {
+            "patient": { "type": "string" },
+            "guardian": { "type": "string" },
+            "officer": { "type": "string" }
+          }
+        },
+        "status": { "type": "string", "enum": ["draft", "final"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "operatorId", "date", "status"]
+    },
+    "Appointment": {
+      "title": "Patient Appointment",
+      "description": "Scheduled visits for dental care.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "time": { "type": "string" },
+        "type": { "type": "string" },
+        "status": { "type": "string", "enum": ["scheduled", "completed", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "date", "time", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles for authenticated staff."
+    },
+    "/patients/{patientId}": {
+      "schema": "Patient",
+      "description": "Central registry of all patients."
+    },
+    "/records/{recordId}": {
+      "schema": "MedicalRecord",
+      "description": "Individual dental hygiene care records."
+    },
+    "/appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Visit schedules."
+    }
+  }
+}
