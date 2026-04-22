@@ -98,7 +98,7 @@ export const Dashboard = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Dashboard Ringkasan</h1>
-          <p className="text-slate-500">Selamat datang kembali di sistem SiGigi.</p>
+          <p className="text-slate-500">Selamat datang kembali di sistem DentaCare Pro.</p>
         </div>
         <div className="flex bg-white p-1 rounded-xl shadow-sm border border-slate-100 self-start">
           <button className="px-4 py-2 text-sm font-semibold bg-brand-600 text-white rounded-lg shadow-sm">Harian</button>

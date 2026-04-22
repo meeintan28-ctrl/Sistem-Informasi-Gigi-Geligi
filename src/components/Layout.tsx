@@ -103,7 +103,7 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
             <Stethoscope size={24} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-800 tracking-tight">SiGigi</h1>
+            <h1 className="text-xl font-bold text-slate-800 tracking-tight">DentaCare Pro</h1>
             <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Dental Hygiene System</p>
           </div>
         </div>
